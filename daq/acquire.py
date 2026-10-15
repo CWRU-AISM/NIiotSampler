@@ -9,7 +9,7 @@ HDF5 layout
   /            attrs: run conditions (fault, drive_freq_hz, load, notes...), versions, config text
   /vib         attrs: sample_rate, t0_unix, device info
   /vib/<chan>  float64 samples in engineering units (g, A); attrs: units, physical channel, ...
-  /temp/t_s    seconds since /vib t0 (PC clock; the two chassis share no hardware clock)
+  /temp/t_s    seconds since /vib t0 (PC clock; temperature reads are software-timed)
   /temp/<chan> °C
 Ctrl+C stops early and keeps what was recorded (root attr completed = False).
 """

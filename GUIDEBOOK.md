@@ -2,8 +2,8 @@
 
 How to set up a PC that records vibration, motor current and (optionally) temperature from the
 SpectraQuest induction-motor (IM) fault rig through an NI cDAQ-9191, and what we know about the
-hardware so far. The original rig survey with photo details (Chinese) is in
-[IM_DAQ_设备信息.md](IM_DAQ_设备信息.md).
+hardware so far. Nameplates and sensor specs are in
+[IM_DAQ_equipment_info.md](IM_DAQ_equipment_info.md).
 
 ---
 
@@ -12,8 +12,8 @@ hardware so far. The original rig survey with photo details (Chinese) is in
 | | |
 |---|---|
 | **Acquisition PC** | **Windows 11, 64-bit.** The cDAQ-9191 does **not** work with NI-DAQmx on Linux (tested, §9). |
-| Chassis on site | **One** cDAQ-9191, S/N **1D92246**. The rig survey mentions a second chassis (1D9225B, thermocouple module); it was not there. |
-| Signals available now | Vibration (Kistler accelerometer) + motor current (clamp) on the chassis' BNC module. Temperature needs a thermocouple module in a second chassis, so it is switched off in the config. |
+| DAQ hardware | **One** cDAQ-9191 (single slot), S/N **1D92246**, with a BNC module. |
+| Signals available now | Vibration (Kistler accelerometer) + motor current (clamp) on the BNC module. A thermocouple needs a thermocouple module, and the only slot holds the BNC module, so temperature is switched off in the config. |
 | Software | `daq/` scripts tested end-to-end on simulated devices (NI 9234 + NI 9211). They have not yet recorded from the real chassis. |
 | Still to confirm on site | Module model, which BNC is which sensor, clamp mV/A, accelerometer sensitivity (§12). |
 
@@ -46,18 +46,18 @@ for about 180 s.
 |---|---|---|
 | Accelerometer **Kistler 8702B25**, SN 5460544 | IEPE, ±25 g, nominal **200 mV/g** (use the calibration certificate value), 1 Hz–8 kHz (±5 %), 10-32 side connector. Mounted on the motor housing at the drive end, radial. | IEPE on (2 mA), AC coupling |
 | Current clamp (grey body, red jaws) | Model unknown; typically 10 or 100 mV/A (label or range switch). Clamped on one motor lead. | Plain voltage, IEPE **off**, DC coupling; volts → A in software |
-| Thermocouple | Taped to the housing; type probably K. Needs a thermocouple module (NI 9211/9212/9213). | Built-in CJC, 1–10 S/s |
+| Thermocouple | Taped to the housing; type probably K. Needs a thermocouple module (NI 9211/9212/9213); where it is connected is to confirm. | Built-in CJC, 1–10 S/s |
 
 **DAQ hardware**
 
-| | Chassis on site | Mentioned in survey, not found |
-|---|---|---|
-| Model | cDAQ-9191, 1 slot, Ethernet + 802.11 Wi-Fi | cDAQ-9191 |
-| P/N | 150227E-21L | 150227E-21L |
-| S/N | **1D92246** | 1D9225B (photo unclear) |
-| Ethernet MAC | 00:80:2F:22:86:48 | 00:80:2F:22:86:5D (unconfirmed) |
-| Hostname | `cDAQ9191-1D92246` | – |
-| Module | BNC/IEPE module, probably **NI 9234** (to confirm) | spring-terminal thermocouple module |
+| Item | Value |
+|---|---|
+| Model | cDAQ-9191, 1 slot, Ethernet + 802.11 Wi-Fi |
+| P/N | 150227E-21L |
+| S/N | **1D92246** |
+| Ethernet MAC | 00:80:2F:22:86:48 |
+| Hostname | `cDAQ9191-1D92246` |
+| Module | BNC/IEPE module, probably **NI 9234** (to confirm) |
 
 The floor equipment is a TRENDnet GREENnet Ethernet switch and a TRENDnet fibre media converter
 with an orange multimode patch cord, plus the power adapters.
@@ -228,7 +228,8 @@ Every script takes `--config <file>` to use a config other than `daq/config.toml
     Fields: `range_V`, `coupling = "DC"`.
   - `physical` (ai0–ai3), `name` (HDF5 dataset name) and `location` (free text, saved in the file).
 - **`[temp]`**: thermocouple module, read in software at `rate_hz` while recording. **`enabled = false`**
-  for now. Set it to `true` once a thermocouple module is connected (its own chassis, e.g. `cDAQ2Mod1`).
+  for now, because the cDAQ-9191's only slot holds the BNC module. If a thermocouple module is ever
+  connected, set `enabled = true` and `device` to that module's DAQmx name.
   Each channel has `physical`, `tc_type` (K, J, T, …), `min_C` and `max_C`.
 
 The full config text is saved inside every HDF5 file, so each recording documents its own settings.
@@ -286,8 +287,9 @@ acc = h5read('x.h5', '/vib/accel_de_radial'); fs = h5readatt('x.h5', '/vib', 'sa
 
 ## 8. Testing without hardware (simulated devices)
 
-`setup/sim_devices.ini` defines `SimDAQ1` (cDAQ-9171 + NI 9234) and `SimDAQ2` (cDAQ-9171 + NI 9211).
-They're USB chassis because a simulated cDAQ-9191 can be created but can't run tasks
+`setup/sim_devices.ini` defines `SimDAQ1` (cDAQ-9171 + NI 9234, stands in for the cDAQ-9191) and
+`SimDAQ2` (cDAQ-9171 + NI 9211, only for testing the optional temperature code). Both are simulated
+USB chassis because a simulated cDAQ-9191 can be created but can't run tasks
 (error -89130/-88705). The task code is the same.
 
 - **Windows:** in NI MAX use *File → Import* and select `setup/sim_devices.ini`. If the import complains
@@ -354,7 +356,7 @@ Simulated values are synthetic, so numbers such as −1100 °C mean nothing.
 
 ```
 GUIDEBOOK.md                 this guide
-IM_DAQ_设备信息.md            original rig survey (2026-10-12, Chinese)
+IM_DAQ_equipment_info.md     rig equipment: motor, drive, cDAQ-9191, sensors (nameplates, specs)
 daq/config.toml              channels, sensitivities, rates  <- edit on site (TODO(onsite))
 daq/common.py                config loading + DAQmx task construction
 daq/daq_check.py             devices / find / add / reserve / selftest / test
@@ -368,21 +370,21 @@ requirements.txt             Python packages; requirements.lock.txt = known-good
 
 ---
 
-## 12. Open items (待确认)
+## 12. Open items
 
 - [ ] Module model in the cDAQ-9191 (NI MAX / `daq_check.py devices` will show it)
 - [ ] Which BNC input carries the accelerometer and which the current clamp
 - [ ] Current clamp model and mV/A range; which motor phase it is on
 - [ ] Accelerometer sensitivity from the calibration certificate (nominal 200 mV/g)
-- [ ] Second chassis (S/N 1D9225B) and thermocouple module: where are they? Thermocouple type?
+- [ ] Thermocouple: type, and where it is connected (needs a thermocouple module)
 - [ ] Is the 9191's Wi-Fi in use, and on which network?
 - [ ] Does the lab have existing LabVIEW programs or an acquisition protocol?
 
 ## 13. Log
 
-- **2026-10-12**: rig surveyed from photos and nameplates → `IM_DAQ_设备信息.md`.
+- **2026-10-12**: rig surveyed from photos and nameplates → `IM_DAQ_equipment_info.md`.
 - **2026-10-15**:
   - NI-DAQmx 2026 Q3 installed on an Ubuntu 26.04 laptop, and the scripts tested on simulated devices.
-  - On site, wired to the switch: one cDAQ-9191 (1D92246) found at 169.254.27.243. Linux can't
+  - On site, wired to the switch: the cDAQ-9191 (1D92246) found at 169.254.27.243. Linux can't
     reserve it (-201427).
   - Decision: acquire with a Windows tower over wired Ethernet.

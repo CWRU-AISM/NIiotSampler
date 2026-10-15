@@ -81,7 +81,7 @@ def cmd_find(args):
           "address on the wired port (ip -br addr), then try:\n"
           "  sudo arp-scan -I enp6s0 --localnet        # DHCP network\n"
           "  sudo arp-scan -I enp6s0 169.254.0.0/16    # link-local (no DHCP); ~1 min\n"
-          "and look for MAC 00:80:2f:22:86:48 / 00:80:2f:22:86:5d (NI).")
+          "and look for MAC 00:80:2f:22:86:48 (the cDAQ-9191).")
     return r.returncode
 
 
@@ -115,7 +115,7 @@ def _dominant_freq(x, rate, fmin=2.0):
 
 def cmd_test(args):
     cfg = load_config(args.config)
-    print("cDAQ #1 (vibration + current)")
+    print("Vibration + current")
     print(f"  module: {check_module(cfg['vib'], args.sim)}")
     with build_vib_task(cfg, args.sim) as task:
         rate = task.timing.samp_clk_rate
@@ -136,7 +136,7 @@ def cmd_test(args):
     if not temp_enabled(cfg):
         print("temperature: disabled in config ([temp] enabled = false)")
         return
-    print("cDAQ #2 (temperature)")
+    print("Temperature")
     print(f"  module: {check_module(cfg['temp'], args.sim)}")
     with build_temp_task(cfg, args.sim) as task:
         vals = np.atleast_1d(task.read())
@@ -151,7 +151,7 @@ def main():
     sub.add_parser("find").set_defaults(func=cmd_find)
     a = sub.add_parser("add")
     a.add_argument("ip", help="IP address or hostname, e.g. cDAQ9191-1D92246")
-    a.add_argument("name", help="e.g. cDAQ1 (vibration chassis) or cDAQ2 (temperature chassis)")
+    a.add_argument("name", help="DAQmx name for the chassis, e.g. cDAQ1 (module becomes cDAQ1Mod1)")
     a.add_argument("--timeout", type=float, default=15.0)
     a.set_defaults(func=cmd_add)
     r = sub.add_parser("reserve")
