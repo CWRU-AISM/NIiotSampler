@@ -1,0 +1,49 @@
+# Acquisition config for the SpectraQuest IM fault rig (see GUIDEBOOK.md, IM_DAQ_设备信息.md).
+# Items marked TODO(onsite) are on the 待确认 list — verify and edit on site.
+#
+# Device names: NI MAX (or `python daq/daq_check.py add <IP> cDAQ1`) names the chassis cDAQ1 and
+# its module cDAQ1Mod1. If NI MAX picked another name, rename it there or edit `device` below.
+# `sim_device` is used instead when a script runs with --sim.
+#
+# Onsite 2026-10-15 there is only ONE cDAQ-9191 (S/N 1D92246). It is single-slot, so it holds one
+# module: the BNC/IEPE module for vibration + current. [temp] is therefore disabled.
+
+[vib]                                   # cDAQ-9191 S/N 1D92246, BNC/IEPE module
+device = "cDAQ1Mod1"
+sim_device = "SimDAQ1Mod1"
+expected_module = "NI 9234"             # TODO(onsite): confirm from module side label
+sample_rate = 25600.0                   # NI 9234 rates are 51.2k/n; 25.6 kS/s = n=2
+
+[[vib.channels]]
+name = "accel_de_radial"                # Kistler 8702B25 SN 5460544
+kind = "accel"
+physical = "ai0"                        # TODO(onsite): which BNC is the accelerometer on
+sensitivity_mV_per_g = 200.0            # TODO(onsite): value from calibration certificate
+range_g = 25.0
+iepe_current_A = 0.002                  # NI 9234 IEPE excitation is 2 mA
+coupling = "AC"
+location = "motor housing, drive end, radial"
+
+[[vib.channels]]
+name = "motor_current"                  # clamp on one motor supply lead
+kind = "current_clamp"
+physical = "ai1"                        # TODO(onsite): which BNC is the clamp on
+sensitivity_mV_per_A = 100.0            # TODO(onsite): 10 or 100 mV/A — clamp label / range switch
+range_V = 5.0
+coupling = "DC"
+location = "motor supply lead (phase TODO)"
+
+[temp]                                  # second chassis with a thermocouple module — not present
+enabled = false                         # set true once a thermocouple module/chassis is connected
+device = "cDAQ2Mod1"
+sim_device = "SimDAQ2Mod1"
+expected_module = "NI 9211"             # TODO(onsite): 9211 / 9212 / 9213?
+rate_hz = 1.0                           # software-timed reads; 1-10 Hz is plenty
+
+[[temp.channels]]
+name = "motor_housing"
+physical = "ai0"                        # TODO(onsite)
+tc_type = "K"                           # TODO(onsite): K = yellow plug, yellow(+)/red(-) leads (ANSI); green plug (IEC)
+min_C = 0.0
+max_C = 150.0
+location = "motor housing surface (taped)"

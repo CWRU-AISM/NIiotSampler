@@ -1,0 +1,11 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Recorded runs stay on the acquisition PC / shared drive, not in git
+data/
+*.h5
+
+# NI driver downloads (fetch from ni.com, see GUIDEBOOK.md)
+downloads/
