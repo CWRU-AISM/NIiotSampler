@@ -2,3 +2,6 @@ nidaqmx>=1.6
 numpy>=2.1
 h5py>=3.14
 matplotlib>=3.10
+fastapi>=0.115
+uvicorn[standard]>=0.30
+tomlkit>=0.13

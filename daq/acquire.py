@@ -3,7 +3,8 @@
   python daq/acquire.py --duration 60 --freq 41 --fault normal --load none --notes "baseline"
   python daq/acquire.py --sim --duration 5 --freq 41 --fault test      # simulated devices
 
-Output: data/YYYY-MM-DD/<YYYYmmdd_HHMMSS>_<fault>_<freq>Hz.h5, plus one row in data/runs_index.csv.
+Output: data/YYYY-MM-DD/<YYYYmmdd_HHMMSS>_<fault>_<freq>Hz[_<load>].h5, plus one row in data/runs_index.csv.
+The file is written by recorder.RunWriter (the sampling console writes the same format).
 
 HDF5 layout
   /            attrs: run conditions (fault, drive_freq_hz, load, notes...), versions, config text
@@ -15,16 +16,9 @@ Ctrl+C stops early and keeps what was recorded (root attr completed = False).
 """
 
 import argparse
-import csv
-import datetime as dt
-import re
-import socket
 import sys
-import time
-from importlib.metadata import version
 from pathlib import Path
 
-import h5py
 import numpy as np
 import nidaqmx
 from nidaqmx.stream_readers import AnalogMultiChannelReader
@@ -38,56 +32,31 @@ from common import (
     check_module,
     device_info,
     device_name,
-    driver_version,
     load_config,
     temp_enabled,
     volts_to_units,
 )
-
-
-def _slug(s):
-    return re.sub(r"[^A-Za-z0-9.]+", "-", s).strip("-") or "na"
-
-
-def _chan_attrs(ch, units):
-    return {k: v for k, v in ch.items() if isinstance(v, (int, float, str))} | {"units": units}
+from recorder import RunWriter
 
 
 def record(args, cfg):
-    start = dt.datetime.now().astimezone()
-    out_dir = Path(args.out) / f"{start:%Y-%m-%d}"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    path = out_dir / f"{start:%Y%m%d_%H%M%S}_{_slug(args.fault)}_{args.freq:g}Hz.h5"
-
     chans = cfg["vib"]["channels"]
     check_module(cfg["vib"], args.sim)
-    temp = None
+    temp = temp_info = None
     if temp_enabled(cfg) and not args.no_temp:
         check_module(cfg["temp"], args.sim)
         temp = TempLogger(cfg, args.sim)
+        temp_info = device_info(device_name(cfg["temp"], args.sim))
 
-    with build_vib_task(cfg, args.sim) as task, h5py.File(path, "w-") as f:
+    with build_vib_task(cfg, args.sim) as task:
         rate = task.timing.samp_clk_rate
         chunk = max(1, int(rate * 0.1))
-        n_total = int(round(args.duration * rate))
         scale = np.array([volts_to_units(c) for c in chans])[:, None]
         reader = AnalogMultiChannelReader(task.in_stream)
-
-        f.attrs.update(
-            fault=args.fault, drive_freq_hz=args.freq, load=args.load, notes=args.notes,
-            operator=args.operator, duration_requested_s=args.duration, settle_s=args.settle,
-            start_time=start.isoformat(), host=socket.gethostname(), simulated=args.sim,
-            daqmx_version=driver_version(), nidaqmx_python=version("nidaqmx"),
-            config_toml=cfg["_text"],
-        )
-        g = f.create_group("vib")
-        g.attrs.update(sample_rate=rate, **{f"device_{k}": str(v) for k, v in
-                                            device_info(device_name(cfg["vib"], args.sim)).items()})
-        dsets = []
-        for ch in chans:
-            ds = g.create_dataset(ch["name"], shape=(0,), maxshape=(None,), chunks=(chunk,), dtype="f8")
-            ds.attrs.update(_chan_attrs(ch, channel_units(ch)))
-            dsets.append(ds)
+        w = RunWriter(args.out, cfg, rate, device_info(device_name(cfg["vib"], args.sim)),
+                      fault=args.fault, freq=args.freq, duration=args.duration, load=args.load,
+                      notes=args.notes, operator=args.operator, settle=args.settle, simulated=args.sim,
+                      source="acquire.py", temp=temp, temp_info=temp_info)
 
         task.start()
         n_settle = int(round(args.settle * rate))
@@ -95,71 +64,36 @@ def record(args, cfg):
             n = min(chunk, n_settle)
             reader.read_many_sample(np.empty((len(chans), n)), n, timeout=10.0)
             n_settle -= n
-        t0 = time.time()
-        if temp:
-            temp.start()
-        g.attrs["t0_unix"] = t0
-        print(f"Recording {args.duration:g} s at {rate:g} S/s -> {path}")
+        w.begin()
+        print(f"Recording {args.duration:g} s at {rate:g} S/s -> {w.path}")
 
-        got, completed = 0, False
-        buf = np.empty((len(chans), chunk))
+        completed, error = False, None
         try:
-            while got < n_total:
-                n = min(chunk, n_total - got)
-                b = buf if n == chunk else np.empty((len(chans), n))
+            while not w.done:
+                n = min(chunk, w.n_total - w.got)
+                b = np.empty((len(chans), n))
                 reader.read_many_sample(b, n, timeout=10.0)
-                b *= scale
-                for ds, row in zip(dsets, b):
-                    ds.resize((got + n,))
-                    ds[got:] = row
-                got += n
-                if got % int(rate) < n:
-                    print(f"\r  {got / rate:6.1f} / {args.duration:g} s", end="", flush=True)
+                w.write(b * scale)
+                if w.got % int(rate) < n:
+                    print(f"\r  {w.elapsed_s:6.1f} / {args.duration:g} s", end="", flush=True)
             completed = True
         except KeyboardInterrupt:
             print("\nStopped by user; saving partial run.")
+        except nidaqmx.DaqError as e:
+            error = e
+            raise
         finally:
             task.stop()
             print()
-            if temp:
-                temp.stop()
-                tg = f.create_group("temp")
-                t_unix = np.asarray(temp.t)
-                tg.create_dataset("t_unix", data=t_unix)
-                tg.create_dataset("t_s", data=t_unix - t0)
-                vals = np.asarray(temp.values).reshape(len(t_unix), -1)
-                for i, ch in enumerate(cfg["temp"]["channels"]):
-                    tg.create_dataset(ch["name"], data=vals[:, i]).attrs.update(_chan_attrs(ch, "degC"))
-                tg.attrs.update({f"device_{k}": str(v) for k, v in
-                                 device_info(device_name(cfg["temp"], args.sim)).items()})
-                if temp.error:
-                    tg.attrs["error"] = str(temp.error)
-                    print(f"WARNING: temperature logging stopped early: {temp.error}")
-            g.attrs["n_samples"] = got
-            f.attrs["completed"] = completed
-            f.attrs["duration_s"] = got / rate
+            summary = w.close(completed, error)
 
-        for ch, ds in zip(chans, dsets):
-            x = ds[:]
-            if len(x):
-                print(f"  {ch['name']:<18} RMS(ac) {np.std(x):8.4f} {channel_units(ch)}")
-        if temp and len(temp.values):
-            print(f"  temperature        {np.asarray(temp.values)[-1].round(2).tolist()} °C")
-
-    _append_index(path, start, args, got / rate, completed)
-    print(f"Saved {path}")
-
-
-def _append_index(path, start, args, duration, completed):
-    index = Path(args.out) / "runs_index.csv"
-    new = not index.exists()
-    with index.open("a", newline="", encoding="utf-8") as fh:
-        w = csv.writer(fh)
-        if new:
-            w.writerow(["file", "start_time", "fault", "drive_freq_hz", "load", "duration_s",
-                        "completed", "simulated", "operator", "notes"])
-        w.writerow([path.relative_to(args.out), start.isoformat(timespec="seconds"), args.fault,
-                    args.freq, args.load, f"{duration:.2f}", completed, args.sim, args.operator, args.notes])
+    for ch in chans:
+        print(f"  {ch['name']:<18} RMS(ac) {summary['rms'][ch['name']]:8.4f} {channel_units(ch)}")
+    if temp and len(temp.values):
+        print(f"  temperature        {np.asarray(temp.values)[-1].round(2).tolist()} °C")
+    if summary["temp_warning"]:
+        print(f"WARNING: {summary['temp_warning']}")
+    print(f"Saved {w.path}")
 
 
 def main():

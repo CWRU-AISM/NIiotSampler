@@ -11,27 +11,32 @@
 [vib]                                   # cDAQ-9191 S/N 1D92246, BNC/IEPE module
 device = "cDAQ1Mod1"
 sim_device = "SimDAQ1Mod1"
-expected_module = "NI 9234"             # TODO(onsite): confirm from module side label
-sample_rate = 25600.0                   # NI 9234 rates are 51.2k/n; 25.6 kS/s = n=2
+expected_module = "NI 9230 (BNC)"       # confirmed via DAQmx 2026-10-15, S/N 1D7B014
+sample_rate = 12800.0                   # NI 9230 max is 12.8 kS/s/ch (3 ch, simultaneous)
 
 [[vib.channels]]
 name = "accel_de_radial"                # Kistler 8702B25 SN 5460544
 kind = "accel"
-physical = "ai0"                        # TODO(onsite): which BNC is the accelerometer on
+physical = "ai0"                        # confirmed 2026-10-15 with motor running
 sensitivity_mV_per_g = 200.0            # TODO(onsite): value from calibration certificate
 range_g = 25.0
-iepe_current_A = 0.002                  # NI 9234 IEPE excitation is 2 mA
+iepe_current_A = 0.004                  # NI 9230 IEPE excitation is 0 or 4 mA only
 coupling = "AC"
 location = "motor housing, drive end, radial"
 
 [[vib.channels]]
 name = "motor_current"                  # clamp on one motor supply lead
 kind = "current_clamp"
-physical = "ai1"                        # TODO(onsite): which BNC is the clamp on
+physical = "ai2"                        # confirmed 2026-10-15 with motor running (ai1 empty)
 sensitivity_mV_per_A = 100.0            # TODO(onsite): 10 or 100 mV/A — clamp label / range switch
 range_V = 5.0
 coupling = "DC"
 location = "motor supply lead (phase TODO)"
+
+[motor]                                 # used by the signal checks (daq/checks.py, sampling console)
+poles = 2                               # Marathon 1/2 HP, 3450 rpm at 60 Hz -> 2-pole
+current_rms_A = [0.3, 4.0]              # plausible clamp reading (FLA 2-2.2 A); ~10x out points at a wrong mV/A
+line_hz = 60.0
 
 [temp]                                  # optional thermocouple module — not in the current setup
 enabled = false                         # set true only if a thermocouple module is connected

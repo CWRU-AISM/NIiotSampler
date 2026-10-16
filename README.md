@@ -30,3 +30,14 @@ configuration, data format, troubleshooting, and what we learned about the hardw
    ```
 
 Without hardware, import `setup/sim_devices.ini` and add `--sim` to any command.
+
+## Sampling console (web page)
+
+```powershell
+python daq/console/server.py          # opens http://127.0.0.1:8050
+python daq/console/server.py --demo   # synthetic motor signals, no hardware
+```
+
+Live waveform and spectrum, signal checks (drive Hz, shaft 1x / slip, clipping, dead channels),
+quick run naming, recording, and a review tab that loads any saved run to check and plot it. It
+writes the same HDF5 files as `acquire.py`. Design notes: [daq/console/DESIGN.md](daq/console/DESIGN.md).

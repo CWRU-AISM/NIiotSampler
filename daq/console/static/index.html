@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sampling Console</title>
+<link rel="stylesheet" href="/static/vendor/uPlot.min.css">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">IM rig · <b>Sampling Console</b> <span id="mode" class="badge"></span></div>
+  <div class="status">
+    <span id="status-pill" class="pill">…</span>
+    <span id="device" class="muted"></span>
+    <span id="rate" class="muted"></span>
+  </div>
+  <div class="actions">
+    <button id="btn-selftest" class="ghost" title="Run the module self-test">Self-test</button>
+    <button id="btn-reconnect" class="ghost" title="Close and reopen the DAQ stream">Reconnect</button>
+  </div>
+</header>
+<div id="banner" class="banner hidden"><span id="banner-text"></span>
+  <button id="btn-takeover" class="hidden">Take over reservation</button></div>
+<div id="module-warning" class="banner warn hidden"></div>
+
+<nav class="tabs">
+  <button data-tab="acquire" class="active">Acquire</button>
+  <button data-tab="checklist">Checklist</button>
+  <button data-tab="review">Runs &amp; Review</button>
+  <button data-tab="config">Sampling config</button>
+  <button data-tab="guide">Guide</button>
+</nav>
+
+<!-- ================================================================= ACQUIRE -->
+<main id="tab-acquire" class="tab">
+  <section class="side">
+    <div class="card" id="cl-card">
+      <div class="row between"><h2>Checklist</h2><a data-goto="checklist" class="small">manage →</a></div>
+      <div id="cl-body"></div>
+    </div>
+  </section>
+
+  <section class="mainview">
+    <div class="toolbar">
+      <button id="btn-stream" class="small" title="Stop: closes the DAQ task and frees the buffer (saves CPU and memory). Record starts it again automatically.">■ Stop stream</button>
+      <label>Window <select id="opt-window"><option>0.25</option><option>0.5</option><option selected>1</option><option>2</option><option>4</option><option>8</option></select> s</label>
+      <label>f max <select id="opt-fmax"><option>200</option><option>500</option><option selected>2000</option><option>4000</option><option>6400</option></select> Hz</label>
+      <label>Averages <select id="opt-avg"><option selected>1</option><option>2</option><option>4</option><option>8</option></select></label>
+      <label><input id="opt-log" type="checkbox" checked> log spectrum</label>
+      <label><input id="opt-markers" type="checkbox" checked> markers</label>
+      <button id="btn-freeze" class="ghost small" title="Freeze the plots only (the DAQ keeps running)">Freeze display</button>
+      <span id="demo-ctl" class="hidden">demo drive <input id="demo-hz" type="number" step="0.25" value="21.25" class="tiny"> Hz
+        load <input id="demo-load" type="number" step="1" min="0" value="0" class="tiny"></span>
+    </div>
+    <div id="sweep-cue" class="card sweep-cue hidden"></div>
+    <div id="live-note" class="card stopped-note hidden">
+      <b>Live stream is off.</b> The DAQ task is closed and its buffer freed.
+      Press <b>▶ Start stream</b> to see live signals. <b>Record</b> also starts it (and discards the first 5 s while the IEPE / AC coupling settles).
+    </div>
+    <div id="live-plots"></div>
+
+    <div class="dock" id="dock">
+      <div class="card naming">
+        <h2>Run naming</h2>
+        <div class="row fault-row"><div id="fault-chips" class="chips"></div>
+          <input id="fault-custom" placeholder="custom fault label" class="short"><button id="btn-add-fault" class="ghost small">add</button></div>
+        <div class="fields">
+          <div><label for="freq">Drive Hz (Lenze)</label><input id="freq" type="number" step="0.01" min="0" placeholder="e.g. 24"></div>
+          <div><label for="load">Load</label><input id="load" list="load-list" value="none"><datalist id="load-list"><option>none</option><option>L0</option><option>L1</option><option>L2</option><option>L3</option><option>L4</option><option>L5</option></datalist></div>
+          <div><label for="operator">Operator</label><input id="operator" placeholder="name"></div>
+          <div><label for="tag">Tag</label><input id="tag" placeholder="e.g. R1"></div>
+          <div class="wide"><label for="notes">Notes</label><textarea id="notes" rows="1" placeholder="sensor moves, bolts, anything unusual"></textarea></div>
+        </div>
+        <div id="freq-measured" class="hint"></div>
+        <div class="filename"><span class="muted">file</span> <code id="fname-preview"></code> <span id="dup-warning" class="warn-text"></span></div>
+      </div>
+
+      <div class="card recordcard">
+        <div class="row between"><h2>Record</h2><div id="dur-chips" class="chips"></div></div>
+        <div class="row">
+          <label>Seconds <input id="duration" type="number" min="1" value="60" class="tiny"></label>
+          <label>Settle <input id="settle" type="number" min="0" step="0.5" value="2" class="tiny"> s</label>
+        </div>
+        <button id="btn-record" class="record">● Record</button>
+        <button id="btn-discard" class="ghost danger hidden" title="Stop now and delete this recording (moved to data\_trash)">✗ Discard this recording</button>
+        <div id="rec-progress" class="progress hidden"><div class="bar"></div><span class="ptext"></span></div>
+        <div id="last-run" class="lastrun hidden"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="checks card">
+    <h2>Signal checks <span class="muted small">live, last 4 s</span></h2>
+    <div id="live-checks" class="checklist"><div class="muted">waiting for data…</div></div>
+  </section>
+</main>
+
+<!-- ================================================================= CHECKLIST -->
+<main id="tab-checklist" class="tab hidden">
+  <section class="side wide">
+    <div class="card">
+      <h2>Checklists</h2>
+      <div id="cl-list" class="cl-list"></div>
+      <div class="row">
+        <button id="cl-new" class="small">New…</button>
+        <label class="filebtn small">Import JSON<input type="file" id="cl-import" accept=".json,application/json" hidden></label>
+        <button id="cl-export" class="ghost small">Export JSON</button>
+        <button id="cl-delete" class="ghost small danger">Delete</button>
+      </div>
+      <p class="muted small">A checklist is one JSON file (data\checklists\). Export it to share or archive the plan with its progress; import one prepared elsewhere (only "plan" is needed, items are generated).</p>
+    </div>
+    <div class="card hidden" id="cl-gen">
+      <div class="row between"><h2>New checklist</h2><button id="cl-gen-reset" class="ghost small">defaults</button></div>
+      <label>Name</label><input data-g="name">
+      <label>Faults (one session each)</label><input data-g="faults">
+      <label>Loads</label><input data-g="loads">
+      <label>Speeds, drive Hz</label><input data-g="speeds">
+      <div class="grid2">
+        <div><label>Rounds (days)</label><input data-g="rounds" type="number" min="1"></div>
+        <div><label>Repeats per point</label><input data-g="repeats" type="number" min="1"></div>
+        <div><label>Duration per point, s</label><input data-g="duration" type="number" min="5"></div>
+        <div><label>Changeover, s (estimate)</label><input data-g="changeover" type="number" min="0"></div>
+      </div>
+      <label>Speed order inside each load</label>
+      <select data-g="order"><option value="serpentine">serpentine (up, then down at the next load)</option><option value="ascending">ascending</option><option value="shuffled">shuffled (fixed per round)</option></select>
+      <label class="inline"><input type="checkbox" data-g="sw_speed"> speed sweep (steps = the speeds)</label>
+      <div class="grid2"><div><label>step, s</label><input data-g="sw_speed_step" type="number" min="2"></div><div><label>at loads</label><input data-g="sw_speed_loads"></div></div>
+      <label class="inline"><input type="checkbox" data-g="sw_load"> load sweep (steps = the loads)</label>
+      <div class="grid2"><div><label>step, s</label><input data-g="sw_load_step" type="number" min="2"></div><div><label>at speeds, Hz</label><input data-g="sw_load_speeds"></div></div>
+      <div id="cl-gen-preview" class="advice small" style="margin-top:10px"></div>
+      <button id="cl-gen-create">Create checklist</button>
+    </div>
+  </section>
+  <section class="mainview">
+    <div class="card">
+      <div class="row between"><h2 id="cl-title">Checklist</h2><span id="cl-progress" class="small"></span></div>
+      <div class="row"><label>Session <select id="cl-session"></select></label>
+        <label>Show <select id="cl-status-filter"><option value="">all</option><option value="todo">to do</option><option value="done">done</option><option value="attention">attention</option><option value="skipped">skipped</option></select></label></div>
+      <div class="row small" id="cl-move-row">Recorded under the wrong fault? Move this session's recordings to
+        <select id="cl-move-to"></select><button id="cl-move" class="ghost small">Move…</button></div>
+      <div class="tablewrap"><table id="cl-table"><thead><tr><th>#</th><th>status</th><th>kind</th><th>load</th><th>Hz</th><th>s</th><th>file</th><th>checks</th><th></th></tr></thead><tbody></tbody></table></div>
+    </div>
+  </section>
+</main>
+
+<!-- ================================================================= REVIEW -->
+<main id="tab-review" class="tab hidden">
+  <section class="side wide">
+    <div class="card">
+      <div class="row between"><h2>Runs</h2><button id="btn-runs-refresh" class="ghost small">Refresh</button></div>
+      <div class="row"><input id="runs-filter" placeholder="filter: fault, date, notes…">
+        <select id="runs-flag"><option value="">all</option><option value="keep">keep</option><option value="bad">bad</option><option value="none">unflagged</option></select></div>
+      <div class="tablewrap"><table id="runs-table"><thead><tr><th>start</th><th>fault</th><th>Hz</th><th>s</th><th>flag</th></tr></thead><tbody></tbody></table></div>
+      <div class="muted small" id="runs-count"></div>
+    </div>
+  </section>
+  <section class="mainview" id="review-detail">
+    <div class="empty muted">Select a run to load it, check it and plot it.</div>
+  </section>
+</main>
+
+<!-- ================================================================= GUIDE -->
+<main id="tab-guide" class="tab hidden">
+  <section class="mainview"><article id="guide" class="card md"><div class="muted">loading…</div></article></section>
+</main>
+
+<!-- ================================================================= CONFIG -->
+<main id="tab-config" class="tab hidden">
+  <section class="mainview">
+    <div class="card">
+      <h2>Sampling configuration <span id="cfg-module" class="muted small"></span></h2>
+      <div class="advice"><b>Short version:</b> leave everything as it is, except two one-time edits:
+        the accelerometer sensitivity (from its calibration certificate) and the clamp mV/A (must match the switch on the clamp).
+        Keep the settings identical for every run in a data set. <a data-goto="guide">Full guide →</a></div>
+      <div class="row"><label for="cfg-rate">Sample rate</label><select id="cfg-rate"></select><span class="muted small">S/s per channel (simultaneous) · <b>keep 12,800</b></span></div>
+      <div class="tablewrap"><table id="cfg-table" class="cfgtable"><thead><tr>
+        <th>channel</th><th>kind</th><th>input</th><th>sensitivity</th><th>range</th><th>IEPE</th><th>coupling</th><th>location</th><th>should I change it?</th></tr></thead><tbody></tbody></table></div>
+      <div class="row">
+        <button id="btn-cfg-apply">Apply (this session)</button>
+        <button id="btn-cfg-save">Apply &amp; save to config.toml</button>
+        <button id="btn-cfg-reload" class="ghost">Discard changes (reload file)</button>
+        <span id="cfg-msg" class="hint"></span>
+      </div>
+      <p class="muted small">The stream restarts on apply; IEPE / AC coupling then needs a few seconds to settle. Recorded files store the configuration that was in effect. Adding or removing channels is done in <code id="cfg-path"></code>.</p>
+    </div>
+    <details class="card"><summary>Effective config.toml</summary><pre id="cfg-text"></pre></details>
+  </section>
+</main>
+
+<div id="modal" class="modal hidden"><div class="modal-box" id="modal-box"></div></div>
+<div id="toast" class="toast hidden"></div>
+<script src="/static/vendor/uPlot.iife.min.js"></script>
+<script src="/static/vendor/marked.min.js"></script>
+<script src="/static/app.js"></script>
+<script src="/static/checklist.js"></script>
+</body>
+</html>
