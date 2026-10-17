@@ -5,6 +5,7 @@ __pycache__/
 
 # Recorded runs stay on the acquisition PC / shared drive, not in git
 data/
+demo_data/
 *.h5
 
 # NI driver downloads (fetch from ni.com, see GUIDEBOOK.md)

@@ -36,8 +36,11 @@
 
 ## 1. Start and stop
 
+Easiest: double-click **`Start-Console.bat`** in the project folder, or **`Start-Console-Demo.bat`**
+for simulated signals. The first run sets up Python automatically. From a terminal:
+
 ```powershell
-cd C:\Users\xxz1277\Desktop\NIsampler\NIiotSampler
+cd <the folder you cloned or unzipped>      # e.g. C:\Users\you\NIiotSampler
 .venv\Scripts\Activate.ps1
 python daq\console\server.py              # opens http://127.0.0.1:8050
 python daq\console\server.py --stopped    # same, but the live stream starts switched off

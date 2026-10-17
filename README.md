@@ -33,11 +33,32 @@ Without hardware, import `setup/sim_devices.ini` and add `--sim` to any command.
 
 ## Sampling console (web page)
 
-```powershell
-python daq/console/server.py          # opens http://127.0.0.1:8050
-python daq/console/server.py --demo   # synthetic motor signals, no hardware
-```
-
 Live waveform and spectrum, signal checks (drive Hz, shaft 1x / slip, clipping, dead channels),
-quick run naming, recording, and a review tab that loads any saved run to check and plot it. It
-writes the same HDF5 files as `acquire.py`. Design notes: [daq/console/DESIGN.md](daq/console/DESIGN.md).
+quick run naming, recording checklists, and a review tab that loads any saved run to check and plot
+it. It writes the same HDF5 files as `acquire.py`. User guide:
+[daq/console/USER_GUIDE.md](daq/console/USER_GUIDE.md) (also in the console's Guide tab). Design
+notes: [daq/console/DESIGN.md](daq/console/DESIGN.md).
+
+### Run it on any Windows PC
+
+1. Install **Python 3.11+** (`winget install Python.Python.3.13`, or python.org; tick "Add to PATH").
+2. Get the project: `git clone https://github.com/CWRU-AISM/NIiotSampler.git`, or on GitHub
+   *Code → Download ZIP* and unzip it.
+3. Double-click in the project folder:
+   - **`Start-Console-Demo.bat`**: simulated motor signals, **no NI hardware or driver needed**.
+     Good for trying the page and for training. Demo recordings go to `demo_data\`.
+   - **`Start-Console.bat`**: the real cDAQ.
+
+   The first start creates `.venv` and installs the packages (needs internet, a few minutes). After
+   that it starts in seconds. The page opens at http://127.0.0.1:8050. Close the black window, or
+   press Ctrl+C in it, to quit.
+
+For real hardware on a new PC, also:
+- install **NI-DAQmx** with NI MAX, then add and reserve the chassis (Quick start step 3 above);
+- edit **`daq/config.toml`** for that rig: `device`, each channel's `physical` input (ai0–ai3) and
+  sensitivity (mV/g, mV/A), and `[motor] poles`. The values in the repo are this rig's. Or edit
+  them in the console's *Sampling config* tab.
+
+From a terminal instead: `.venv\Scripts\python daq\console\server.py` (`--demo`, `--stopped`,
+`--port 8060`, `--data D:\runs`). The console only listens on this PC (127.0.0.1); it is not
+reachable from the network.
