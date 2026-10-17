@@ -5,7 +5,34 @@
 > 2. the **clamp mV/A**, which must match the switch on the clamp.
 >
 > Keep every setting identical for all runs in a data set. Per run, you only fill in the
-> **fault**, the **drive Hz** shown on the Lenze display, and the **duration**.
+> **fault**, the **target drive Hz**, and the **duration**.
+
+> ⚠ **IMPORTANT: set the speed by the console's MEASURED value, not by the Lenze display.**
+>
+> The Lenze SMVector runs open loop (V/Hz): there is no speed or frequency feedback, so the
+> keypad number is only a command. Its real output differs from the keypad, and the
+> difference changes from day to day and with temperature and load. Observed on this rig:
+> keypad *n* gave *n* + 1.2 Hz on 2026-10-15, *n* + 1.45 Hz on 2026-10-16, and
+> *n* + 1.7 Hz right after a cold start.
+> Slip compensation (output raised with motor current) and analog-reference drift are the
+> likely causes.
+>
+> **MEASURED** is the fundamental frequency of the motor current, taken from the DAQ.
+> On the saved runs it agrees with the true frequency to about ±0.01 Hz. So:
+> 1. **Turn the drive until MEASURED = TARGET** (badge green). Ignore what the keypad says.
+> 2. **Warm up 10–15 min** before the first recording of a session; the offset shrinks as
+>    the rig warms.
+> 3. **Re-check MEASURED at every speed and load change.** The offset depends on load, so a
+>    load step moves the frequency even if you do not touch the keypad.
+>    Re-tune to the **same** MEASURED Hz at every load. The **shaft** speed (shaft 1× in Signal
+>    checks) will still be a little lower at higher load. That is motor slip, part of the
+>    load's signature, so leave it: do not try to hold the shaft rpm constant.
+>    In a **load sweep** recording, do not touch the drive during the sweep; just set the
+>    speed before pressing Record.
+> 4. Write **target** Hz in the file name (the checklist does this). For analysis, use the
+>    measured frequency (Review → checks, computed from the file), not the label.
+>
+> Matching MEASURED is what makes runs from different days and rounds comparable.
 
 ## 1. Start and stop
 
@@ -26,15 +53,16 @@ release the DAQ.
 
 ## 2. Recording a run
 
-1. **Start the motor**, set the Lenze drive, and **wait until speed and current are steady**.
+1. **Start the motor**, turn the Lenze until **MEASURED = target** (not the keypad number), and **wait until speed and current are steady**.
    About 30 s after a speed change is a good habit.
 2. On the **Acquire** tab, check the live view. The **Signal checks** panel should show no ✗:
    - `motor_current`: "fundamental … Hz = drive … Hz";
    - `accel_de_radial`: "shaft 1x … Hz, slip …%".
 3. Fill in **Run naming**:
    - Click a **fault** button. For anything else, type a label and press *add*; it is remembered.
-   - **Drive Hz**: the number on the Lenze display. "measured current fundamental" below the
-     field is the value the DAQ sees. Click *use* to copy it if you trust it over the display.
+   - **Drive Hz**: the **target** frequency. Adjust the Lenze until the "measured current
+     fundamental" below the field equals it. Do **not** copy the Lenze display: it is open loop
+     and drifts (see ⚠ at the top). *use* copies the measured value into the field.
    - **Load**, **operator** and **notes** are optional, but they are stored in the file, so use
      them. Put anything unusual in notes (sensor moved, bolts changed, extra noise…).
    - **Tag** is added to the filename, e.g. `r1`, `disk2`.
@@ -90,6 +118,10 @@ it to `data\checklists\<name>.json`.
 - red: off target or no signal.
 
 During a recording it stays red if the speed drifts.
+
+MEASURED is the real supply frequency from the current clamp, and it is the value to match.
+Turn the drive until MEASURED = TARGET. The Lenze keypad number is open loop and drifts by
+1–2 Hz between days (⚠ at the top of this guide).
 
 **Load changes.** When the next item needs a different load, a pop-up asks you to change it
 (e.g. "L2 → L3"). Recording and auto-record are blocked until you press **✓ Load is set to 3**.
@@ -218,7 +250,7 @@ Settings only in `config.toml` (edit the file, then restart the console):
 |---|---|
 | **Duration** | **60 s** as the default. It gives 14 averaged 8 s spectra (0.125 Hz resolution), enough for slip and broken-bar sidebands. Use the same duration for all runs in a data set. Rather than one very long run, record **3 or more repeats** per condition (tag `r1`, `r2`, …). |
 | **Settle** | Leave it at **2 s**. See *What "settle" means* below. |
-| **Drive Hz** | The Lenze display value. It goes into the filename and the metadata, and the checks compare it with the measured current. |
+| **Drive Hz** | The **target** Hz, matched with MEASURED, not the Lenze display (⚠ at top). It goes into the filename and the metadata, and the checks compare it with the measured current. |
 | **Fault / load / tag / notes** | Use consistent spelling. The fault buttons help. Labels end up in the filename, so keep them short. |
 
 ### What "settle" means

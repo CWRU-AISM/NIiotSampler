@@ -25,9 +25,19 @@ coupling = "AC"
 location = "motor housing, drive end, radial"
 
 [[vib.channels]]
+name = "accel_de_radial_b"              # second Kistler accelerometer, same model as ai0
+kind = "accel"
+physical = "ai1"                        # added 2026-10-16: it was connected but never powered (IEPE off in the 10-15 scan)
+sensitivity_mV_per_g = 200.0            # TODO(onsite): value from its calibration certificate
+range_g = 25.0
+iepe_current_A = 0.004
+coupling = "AC"
+location = "motor housing, drive end, radial; perpendicular to ai0 (H/V: TODO, tap test)"
+
+[[vib.channels]]
 name = "motor_current"                  # clamp on one motor supply lead
 kind = "current_clamp"
-physical = "ai2"                        # confirmed 2026-10-15 with motor running (ai1 empty)
+physical = "ai2"                        # confirmed 2026-10-15 with motor running
 sensitivity_mV_per_A = 100.0            # TODO(onsite): 10 or 100 mV/A — clamp label / range switch
 range_V = 5.0
 coupling = "DC"
